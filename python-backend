@@ -1,0 +1,41 @@
+from flask import Flask, jsonify, request
+import datetime
+
+app = Flask(__name__)
+
+# Mock database representing the "Digital Twin" state
+garden_twin = {
+    "bed_1": {
+        "plant_type": "Tomato",
+        "moisture_level": 45,  # Percentage
+        "last_watered": "2026-04-28 08:00",
+        "status": "Healthy",
+        "threshold": 30.0
+    }
+}
+
+@app.route('/sensor_update', methods=['POST'])
+def update_twin():
+    data = request.json
+    bed_id = data.get('bed_id')
+    current_moisture = data.get('moisture')
+    
+    # Update the Digital Twin
+    if bed_id in garden_twin:
+        garden_twin[bed_id]['moisture_level'] = current_moisture
+        
+        # Self-Preservation Logic
+        if current_moisture < garden_twin[bed_id]['threshold']:
+            garden_twin[bed_id]['status'] = "ACTION REQUIRED: Watering"
+            trigger_irrigation(bed_id)
+        else:
+            garden_twin[bed_id]['status'] = "Healthy"
+            
+    return jsonify({"status": "Twin Updated", "current_state": garden_twin[bed_id]})
+
+def trigger_irrigation(bed_id):
+    # In a real app, this sends an MQTT signal to the physical water valve
+    print(f"SIGNAL SENT: Opening valve for {bed_id}")
+
+if __name__ == '__main__':
+    app.run(debug=True)
