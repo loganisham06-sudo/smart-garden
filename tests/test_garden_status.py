@@ -1,11 +1,12 @@
 import pytest
 import sys
 import os
+import json
 
 # Add parent directory to path to import the Flask app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from gemini_code_1777487583815 import app, garden_state
+from python_backend import app, garden_twin
 
 
 @pytest.fixture
@@ -16,58 +17,89 @@ def client():
         yield client
 
 
-def test_home_page(client):
-    """Test that the home page loads."""
-    response = client.get('/')
-    assert response.status_code in [200, 404]  # 404 if template not found, but endpoint works
-
-
-def test_get_status_endpoint(client):
-    """Test that the /api/status endpoint returns garden state."""
-    response = client.get('/api/status')
+def test_get_garden_state(client):
+    """Test that the /garden_state endpoint returns garden state."""
+    response = client.get('/garden_state')
     assert response.status_code == 200
     data = response.get_json()
-    assert 'moisture' in data
-    assert 'temp' in data
-    assert 'status' in data
-    assert 'last_watered' in data
+    assert 'bed_1' in data
+    assert data['bed_1']['plant_type'] == 'Tomato'
+    assert 'moisture_level' in data['bed_1']
+    assert 'status' in data['bed_1']
 
 
 def test_garden_state_initial_values():
     """Test that garden state has expected initial values."""
-    assert garden_state['moisture'] == 65
-    assert garden_state['temp'] == 72
-    assert garden_state['status'] == 'Optimal'
-    assert isinstance(garden_state['last_watered'], str)
+    assert garden_twin['bed_1']['plant_type'] == 'Tomato'
+    assert garden_twin['bed_1']['threshold'] == 30.0
+    assert isinstance(garden_twin['bed_1']['last_watered'], str)
 
 
-def test_update_garden_endpoint(client):
-    """Test that the /api/update endpoint updates garden state."""
+def test_sensor_update_valid_data(client):
+    """Test that the /sensor_update endpoint updates garden state with valid data."""
     update_data = {
-        'moisture': 55,
-        'temp': 75
+        'bed_id': 'bed_1',
+        'moisture': 55
     }
-    response = client.post('/api/update', json=update_data)
+    response = client.post('/sensor_update', 
+                          data=json.dumps(update_data),
+                          content_type='application/json')
     assert response.status_code == 200
     data = response.get_json()
-    assert 'message' in data
-    assert 'Digital Twin Updated' in data['message']
+    assert data['status'] == 'Twin Updated'
+    assert data['current_state']['moisture_level'] == 55
 
 
-def test_moisture_level_update(client):
-    """Test that moisture level is properly updated via POST request."""
-    initial_moisture = garden_state['moisture']
-    new_moisture = 75
-    
-    response = client.post('/api/update', json={'moisture': new_moisture})
+def test_sensor_update_missing_data(client):
+    """Test that the /sensor_update endpoint rejects incomplete data."""
+    update_data = {
+        'bed_id': 'bed_1'
+    }
+    response = client.post('/sensor_update',
+                          data=json.dumps(update_data),
+                          content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+
+
+def test_sensor_update_invalid_moisture_range(client):
+    """Test that the /sensor_update endpoint validates moisture range."""
+    update_data = {
+        'bed_id': 'bed_1',
+        'moisture': 150  # Invalid: > 100
+    }
+    response = client.post('/sensor_update',
+                          data=json.dumps(update_data),
+                          content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+
+
+def test_sensor_update_nonexistent_bed(client):
+    """Test that the /sensor_update endpoint rejects nonexistent beds."""
+    update_data = {
+        'bed_id': 'bed_99',
+        'moisture': 50
+    }
+    response = client.post('/sensor_update',
+                          data=json.dumps(update_data),
+                          content_type='application/json')
+    assert response.status_code == 404
+    data = response.get_json()
+    assert 'error' in data
+
+
+def test_low_moisture_triggers_action(client):
+    """Test that low moisture triggers action required status."""
+    update_data = {
+        'bed_id': 'bed_1',
+        'moisture': 20  # Below threshold of 30
+    }
+    response = client.post('/sensor_update',
+                          data=json.dumps(update_data),
+                          content_type='application/json')
     assert response.status_code == 200
-    assert garden_state['moisture'] == new_moisture
-
-
-def test_temperature_level_update(client):
-    """Test that temperature is properly updated via POST request."""
-    new_temp = 78
-    
-    response = client.post('/api/update', json={'temp': new_temp})
-    assert response.status_code == 200
-    assert garden_state['temp'] == new_temp
+    data = response.get_json()
+    assert 'ACTION REQUIRED: Watering' in data['current_state']['status']
