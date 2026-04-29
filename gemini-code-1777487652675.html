@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Garden Twin Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>My Backyard Twin</h1>
+        <div class="grid">
+            <div class="card">
+                <h3>Soil Moisture</h3>
+                <p id="moisture" class="value">--%</p>
+                <div class="progress-bar"><div id="moisture-fill" class="fill"></div></div>
+            </div>
+            <div class="card">
+                <h3>Status</h3>
+                <p id="status" class="value">Analyzing...</p>
+            </div>
+        </div>
+        <button onclick="updateData()">Refresh Data</button>
+    </div>
+
+    <script>
+        async function updateData() {
+            const response = await fetch('/api/status');
+            const data = await response.json();
+            document.getElementById('moisture').innerText = data.moisture + '%';
+            document.getElementById('moisture-fill').style.width = data.moisture + '%';
+            document.getElementById('status').innerText = data.status;
+        }
+        setInterval(updateData, 5000); // Auto-refresh every 5 seconds
+        updateData();
+    </script>
+</body>
+</html>
