@@ -1,0 +1,8 @@
+/my-smart-garden
+│── app.py              # The Python Backend (Logic & API)
+│── /static
+│   └── style.css       # The Design
+│── /templates
+│   └── index.html      # The Frontend Dashboard
+│── README.md           # Project documentation
+│── requirements.txt    # List of dependencies
